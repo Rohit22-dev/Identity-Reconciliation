@@ -3,9 +3,9 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from crud import create_contact, get_contact_network, get_contacts_by_email_or_phone
-from db import get_db_session
-from schemas import IdentifyRequest
+from app.services.crud import create_contact, get_contact_network, get_contacts_by_email_or_phone
+from app.core.db import get_db_session
+from app.schemas.schemas import IdentifyRequest
 
 router = APIRouter()
 

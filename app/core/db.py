@@ -1,12 +1,8 @@
-import os
-from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session, scoped_session
 from threading import Lock
-from models import Base
-
-# Load environment variables
-load_dotenv()
+from app.models.models import Base
+from app.core.config import settings
 
 class Database:
     _instance = None
@@ -39,8 +35,7 @@ class Database:
             db.close()
 
 # Initialize the database
-connection_string = os.getenv("DB_CONNECTION_STRING")
-database = Database(connection_string)
+database = Database(settings.DB_CONNECTION_STRING)
 
 def get_db_session():
     db = database.get_session()

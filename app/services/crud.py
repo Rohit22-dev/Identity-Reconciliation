@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-from models import Contact
+from app.models.models import Contact
 from datetime import datetime, timezone
 from typing import List, Tuple, Set
 

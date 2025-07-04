@@ -1,135 +1,180 @@
-# Bitespeed Identity Reconciliation Service
+# Bitespeed Identity Reconciliation API
 
-A FastAPI-based service for identifying and reconciling customer contact information across multiple orders.
+A FastAPI-based REST API for contact identity reconciliation and management. This application helps identify and link contacts based on their email addresses and phone numbers.
 
 ## Features
 
-- Identify and link customer contacts based on email and phone number
-- Maintain primary and secondary contact relationships
-- RESTful API endpoint for contact identification
-- PostgreSQL database integration
-- Containerized with Docker
+- **Contact Identification**: Identify contacts by email or phone number
+- **Automatic Linking**: Automatically link related contacts into networks
+- **Primary/Secondary Contact Management**: Maintain primary and secondary contact relationships
+- **Network Expansion**: Recursively expand contact networks to find all related contacts
+- **RESTful API**: Clean, RESTful API design with proper error handling
 
-## Prerequisites
+## Project Structure
 
-- Python 3.8+
-- PostgreSQL database
-- Docker (optional)
+```
+Identity Reconciliation/
+├── app/
+│   ├── __init__.py
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── config.py          # Application configuration
+│   │   └── db.py             # Database connection and session management
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── models.py         # SQLAlchemy database models
+│   ├── routes/
+│   │   ├── __init__.py
+│   │   └── routes.py         # API route definitions
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   └── schemas.py        # Pydantic request/response models
+│   └── services/
+│       ├── __init__.py
+│       └── crud.py           # Database operations and business logic
+├── main.py                   # FastAPI application entry point
+├── requirements.txt          # Python dependencies
+├── pyproject.toml           # Poetry configuration
+├── poetry.lock              # Poetry lock file
+├── .env                     # Environment variables (create this)
+├── .gitignore              # Git ignore rules
+└── README.md               # This file
+```
 
 ## Installation
 
-1. Clone the repository:
+1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd Identity-Reconciliation
+   cd "Identity Reconciliation"
    ```
 
-2. Create a virtual environment and activate it:
+2. **Install dependencies**
    ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. Install dependencies:
-   ```bash
+   # Using pip
    pip install -r requirements.txt
+   
+   # Or using Poetry
+   poetry install
    ```
 
-4. Set up environment variables:
-   Create a `.env` file in the project root with the following content:
+3. **Set up environment variables**
+   Create a `.env` file in the root directory:
+   ```env
+   DB_CONNECTION_STRING=postgresql://username:password@localhost:5432/database_name
    ```
-   DB_CONNECTION_STRING=postgresql://username:password@localhost:5432/dbname
-   ```
 
-## Running the Application
-
-### Development
-
-1. Start the FastAPI development server:
+4. **Run the application**
    ```bash
-   uvicorn main:app --reload
+   python main.py
    ```
-
-2. The API will be available at `http://localhost:8000`
-
-### Production with Docker
-
-1. Build the Docker image:
-   ```bash
-   docker build -t identity-reconciliation .
-   ```
-
-2. Run the container:
-   ```bash
-   docker run -p 8000:8000 --env-file .env identity-reconciliation
-   ```
+   
+   The API will be available at `http://localhost:8000`
 
 ## API Documentation
 
 Once the application is running, you can access:
+- **Interactive API docs**: `http://localhost:8000/docs`
+- **ReDoc documentation**: `http://localhost:8000/redoc`
 
-- API Documentation: `http://localhost:8000/docs`
-- Alternative Documentation: `http://localhost:8000/redoc`
+## API Endpoints
 
-## API Endpoint
+### POST /api/v1/identify
 
-### Identify Contact
+Identify and reconcile contact information.
 
-- **URL**: `/identify`
-- **Method**: `POST`
-- **Request Body**:
-  ```json
-  {
-    "email": "example@example.com",
-    "phoneNumber": "1234567890"
+**Request Body:**
+```json
+{
+  "email": "user@example.com",
+  "phoneNumber": "1234567890"
+}
+```
+
+**Response:**
+```json
+{
+  "contact": {
+    "primaryContactId": 1,
+    "emails": ["user@example.com", "user2@example.com"],
+    "phoneNumbers": ["1234567890", "0987654321"],
+    "secondaryContactIds": [2, 3]
   }
-  ```
-  Note: At least one of `email` or `phoneNumber` is required.
-
-- **Success Response**:
-  - **Code**: 200
-  - **Content**:
-    ```json
-    {
-      "contact": {
-        "primaryContactId": 1,
-        "emails": ["example@example.com"],
-        "phoneNumbers": ["1234567890"],
-        "secondaryContactIds": []
-      }
-    }
-    ```
+}
+```
 
 ## Database Schema
 
-The service uses the following database schema:
+### Contacts Table
 
-```sql
-CREATE TABLE contacts (
-    id SERIAL PRIMARY KEY,
-    phone_number VARCHAR(20),
-    email VARCHAR(255),
-    linked_id INTEGER REFERENCES contacts(id),
-    link_precedence VARCHAR(10) NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    deleted_at TIMESTAMP
-);
+| Column | Type | Description |
+|--------|------|-------------|
+| id | Integer | Primary key |
+| email | String | Contact email address |
+| phone_number | String | Contact phone number |
+| linked_id | Integer | ID of the primary contact (for secondary contacts) |
+| link_precedence | String | 'primary' or 'secondary' |
+| created_at | DateTime | Contact creation timestamp |
+| updated_at | DateTime | Last update timestamp |
+| deleted_at | DateTime | Soft delete timestamp |
 
--- Indexes for better query performance
-CREATE INDEX idx_contacts_email ON contacts(email);
-CREATE INDEX idx_contacts_phone_number ON contacts(phone_number);
-CREATE INDEX idx_contacts_linked_id ON contacts(linked_id);
-```
+## Business Logic
 
-## Testing
+### Contact Linking Rules
 
-To run the tests:
+1. **Primary Contact**: The first contact created in a network becomes the primary contact
+2. **Secondary Contacts**: Additional contacts in the same network become secondary contacts
+3. **Automatic Linking**: When a new contact shares email or phone with existing contacts, they are automatically linked
+4. **Network Expansion**: When multiple primary contacts are found, the oldest becomes primary and others become secondary
+5. **Consistent Response**: The API always returns the same network information regardless of which contact's email/phone is used in the request
 
+### Example Scenarios
+
+1. **New Contact**: Creates a new primary contact
+2. **Existing Contact**: Returns the existing contact network
+3. **Linked Contacts**: Automatically links contacts and returns the complete network
+4. **Multiple Primary Contacts**: Merges networks by making the oldest contact primary
+
+## Development
+
+### Running Tests
 ```bash
-pytest
+# Add test commands here when tests are implemented
 ```
+
+### Code Style
+This project follows PEP 8 style guidelines.
+
+### Database Migrations
+Currently using SQLAlchemy's `create_all()` for table creation. Consider using Alembic for production migrations.
+
+## Deployment
+
+### Production Considerations
+
+1. **Environment Variables**: Set proper production environment variables
+2. **Database**: Use a production-grade database (PostgreSQL recommended)
+3. **Security**: Configure CORS properly for production domains
+4. **Logging**: Implement proper logging
+5. **Monitoring**: Add health checks and monitoring
+
+### Docker Deployment
+```dockerfile
+# Add Dockerfile when needed
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
+[Add your license here]
+
+## Support
+
+For support and questions, please contact [your contact information]. 
