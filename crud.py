@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from models import Contact
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Tuple, Set
 
 
@@ -35,18 +35,37 @@ def get_contact_network(
     if not contact_ids:
         return [], set()
 
-    # Find all contacts that are linked to these IDs or have these as linked_id
-    contacts = (
+    # Keep expanding the network until we don't find any new contacts
+    all_network_ids = set(contact_ids)
+    previous_count = 0
+    
+    while len(all_network_ids) > previous_count:
+        previous_count = len(all_network_ids)
+        
+        # Find all contacts that are linked to these IDs or have these as linked_id
+        contacts = (
+            db.query(Contact)
+            .filter((Contact.id.in_(all_network_ids)) | (Contact.linked_id.in_(all_network_ids)))
+            .all()
+        )
+        
+        # Add all found contact IDs to the network
+        all_network_ids.update({c.id for c in contacts})
+        
+        # Also add linked_id for any secondary contacts we found
+        for contact in contacts:
+            if contact.linked_id:
+                all_network_ids.add(contact.linked_id)
+
+    # Get all contacts in the final network
+    final_contacts = (
         db.query(Contact)
-        .filter((Contact.id.in_(contact_ids)) | (Contact.linked_id.in_(contact_ids)))
+        .filter(Contact.id.in_(all_network_ids))
         .all()
     )
 
-    # Get all unique contact IDs in this network
-    network_ids = {c.id for c in contacts}
-
     # Check if we need to expand further (in case of multiple primary contacts that need to be linked)
-    primary_contacts = [c for c in contacts if c.link_precedence == "primary"]
+    primary_contacts = [c for c in final_contacts if c.link_precedence == "primary"]
     if len(primary_contacts) > 1:
         # If we have multiple primary contacts, we need to link them
         primary_contacts.sort(key=lambda x: x.created_at)
@@ -56,7 +75,7 @@ def get_contact_network(
         for contact in primary_contacts[1:]:
             contact.link_precedence = "secondary"
             contact.linked_id = oldest_primary.id
-            contact.updated_at = datetime.utcnow()
+            contact.updated_at = datetime.now(timezone.utc)
             db.add(contact)
 
         db.commit()
@@ -66,7 +85,7 @@ def get_contact_network(
             db, {oldest_primary.id} | {c.id for c in primary_contacts[1:]}
         )
 
-    return contacts, network_ids
+    return final_contacts, all_network_ids
 
 
 def create_contact(
